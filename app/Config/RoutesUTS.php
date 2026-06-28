@@ -15,3 +15,4 @@ $routes->get('logout', 'AuthController::logout');
 
 $routes->get('produk', 'ProdukController::index', ['filter' => 'auth']); //mengakses rute ini harus login dulu
 $routes->get('keranjang', 'TransaksiController::index', ['filter' => 'auth']); //mengakses rute ini harus login dulu
+$routes->get('profile', 'ProfileController::index', ['filter' => 'auth']); //mengakses rute ini harus login dulu
