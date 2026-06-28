@@ -1,5 +1,7 @@
 <?= $this->extend('layout') ?>
 <?= $this->section('content') ?>
+
+<!-- Table with stripped rows -->
 <?php
 if (session()->getFlashData('success')) {
 ?>
@@ -23,7 +25,9 @@ if (session()->getFlashData('failed')) {
 <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#addModal">
     Tambah Data
 </button>
-<!-- Table with stripped rows -->
+<a class="btn btn-success" target="_blank" href="<?= base_url()?>produk/download">
+    Download Data
+</a>
 <table class="table datatable">
     <thead>
         <tr>
