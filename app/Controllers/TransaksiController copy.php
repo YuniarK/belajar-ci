@@ -163,9 +163,6 @@ class TransaksiController extends BaseController
             return redirect()->back();
         }
 
-        // 1. LOAD HELPER DISKON (Wajib dilakukan agar fungsi hitung_diskon() bisa dibaca)
-        helper('diskon');
-
         $db = \Config\Database::connect();
         $db->transStart(); 
 
@@ -174,20 +171,13 @@ class TransaksiController extends BaseController
             $subtotal += $item['qty'] * $item['price'];
         }
 
-        // 2. HITUNG LOGIKA DISKON BERDASARKAN SUBTOTAL BELANJA
-        $hasil_diskon = hitung_diskon($subtotal);
-        $nominal_diskon = $hasil_diskon['nominal']; // Menyimpan besaran nominal rupiah diskon
-
-        $input_ongkir = $this->request->getVar('ongkir');
-
-        $ongkir = (!empty($input_ongkir)) ? (float) $input_ongkir : 0.0;
+        $ongkir = (int) $this->request->getPost('ongkir');
 
         $transaction = [
             'username'    => $this->request->getPost('username'),
             'alamat'      => $this->request->getPost('alamat'),
             'ongkir'      => $ongkir,
-            'diskon'      => (int) round($nominal_diskon), // Hasil Task 1 (Migration Kolom Diskon)
-            'total_harga' => $subtotal - $nominal_diskon + $ongkir, // Total dikurangi diskon sebelum ditambah ongkir
+            'total_harga' => $subtotal + $ongkir,
             'status'      => 0, 
         ];
 
@@ -205,7 +195,7 @@ class TransaksiController extends BaseController
                 'transaction_id' => $transactionId,
                 'product_id'     => $item['id'],
                 'jumlah'         => $item['qty'],
-                'diskon'         => 0,// Ini opsional, dibiarkan 0 jika diskon berlaku per transaksi global
+                'diskon'         => 0,
                 'subtotal_harga' => $item['qty'] * $item['price'] 
             ]);
         }
@@ -218,7 +208,7 @@ class TransaksiController extends BaseController
 
             //hapus session keranjang belanja 
         $this->cart->destroy();
-        return redirect()->to(base_url())->with('success', 'Transaksi berhasil dibuat!');
+        return redirect()->to(base_url());
     }
 
     public function history()

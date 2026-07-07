@@ -5,7 +5,6 @@
         <?= form_open('buy', 'class="row g-3"') ?>
 
         <?= form_hidden('username', session()->get('username')) ?>
-        <input type="hidden" name="subtotal_harga" id="subtotal_harga" value="<?= $total ?>">
         <input type="hidden" name="total_harga" id="total_harga" value="">
 
         <div class="col-12">
@@ -34,8 +33,11 @@
         </div>
         <div class="col-12">
             <?= form_label('Ongkir', 'ongkir', ['class' => 'form-label']) ?>
-            <input type="text" id="ongkir_tampilan" class="form-control" readonly value="Rp 0">
-            <input type="hidden" name="ongkir" id="ongkir" value="0">
+            <?= form_input([
+                'name'     => 'ongkir',
+                'id'       => 'ongkir',
+                'class'    => 'form-control',
+                'readonly' => true]) ?>
         </div>
         <div class="col-12">
             <?= form_submit(
@@ -76,47 +78,37 @@
                     <td>Subtotal</td>
                     <td><?= number_to_currency($total, 'IDR') ?></td>
                 </tr>
-                
-                <?php 
-                    helper('diskon');
-                    $info_diskon = hitung_diskon($total); 
-                ?>
                 <tr>
                     <td colspan="2"></td>
-                    <td>Diskon</td>
-                    <td class="text-danger">
-                        -<?= number_to_currency($info_diskon['nominal'], 'IDR') ?> (<span id="persen_tampilan"><?= $info_diskon['persen'] ?></span>%)
-                    </td>
-                </tr>
-
-                <tr>
-                    <td colspan="2"></td>
-                    <td>Grand Total</td>
-                    <td><span id="total"><?= number_to_currency($total - $info_diskon['nominal'], 'IDR') ?></span></td>
+                    <td>Total</td>
+                    <td><span id="total"><?= number_to_currency($total, 'IDR') ?></span></td>
                 </tr>
             </tbody>
         </table>
     </div>
 </div>
 <?= $this->endSection() ?>
-
+<?= $this->section('script') ?>
+<script>
+$(document).ready(function() {
+	$('#kelurahan').select2({
+	    placeholder: 'Cari daerah tujuan',
+	    minimumInputLength: 3, 
+	});
+});
+</script>
+<?= $this->endSection() ?>
 <?= $this->section('script') ?>
 <script>
 $(document).ready(function() {
     let ongkir = 0;
     let subtotal = <?= $total ?>;
-    
-    // Ambil nominal diskon dari perhitungan Helper PHP di atas
-    let nominalDiskon = <?= $info_diskon['nominal'] ?>;
     hitungTotal();
 
     function hitungTotal() {
-        // Rumus Grand Total Kuis: Subtotal - Diskon + Ongkir
-        let total = subtotal - nominalDiskon + ongkir;
+        let total = subtotal + ongkir;
 
         $("#ongkir").val(ongkir);
-        $("#ongkir_tampilan").val(`Rp ${ongkir.toLocaleString('id-ID')}`);
-
         $("#total").text(`IDR ${total.toLocaleString('id-ID')}`);
         $("#total_harga").val(total);
     }
@@ -143,7 +135,7 @@ $(document).ready(function() {
     $("#kelurahan").on('change', function () {
         let id_kelurahan = $(this).val();
 
-        $("#layanan").empty().append('<option value="">-- Memuat Layanan... --</option>');
+        $("#layanan").empty();
         ongkir = 0;
         $("#ongkir").val(0);
         hitungTotal(); 
@@ -152,27 +144,17 @@ $(document).ready(function() {
             url: "<?= site_url('ajax/costs') ?>", 
             dataType: "json",
             data: {
-                destination: id_kelurahan,
+                destination: id_kelurahan   
             },
-            success: function (response) { 
-                $("#layanan").empty().append('<option value="">-- Pilih Layanan --</option>');
-                
-                // Menyesuaikan dengan response struktur objek 'data' dari Komerce API
-                if (response && response.length > 0) {
-                    response.forEach(function (item) {
-                        $("#layanan").append(
-                            $('<option>', {
-                                value: item.cost,
-                                text: `${item.service} : Rp ${item.cost.toLocaleString('id-ID')} (Estimasi ${item.etd} Hari)`
-                            })
-                        );
-                    });
-                } else {
-                    $("#layanan").append('<option value="">Layanan tidak tersedia</option>');
-                }
-            },
-            error: function() {
-                $("#layanan").empty().append('<option value="">Gagal memuat layanan</option>');
+            success: function (data) { 
+                data.forEach(function (item) {
+                    $("#layanan").append(
+                        $('<option>', {
+                            value: item.cost,
+                            text: `${item.description} (${item.service}) : estimasi ${item.etd}`
+                        })
+                    );
+                });
             }
         });
     });
@@ -181,6 +163,7 @@ $(document).ready(function() {
         ongkir = parseInt($(this).val());
         hitungTotal();
     }); 
+
 });
 </script>
 <?= $this->endSection() ?>
