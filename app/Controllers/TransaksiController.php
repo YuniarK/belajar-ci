@@ -155,6 +155,26 @@ class TransaksiController extends BaseController
     return $this->response->setJSON($results);
     }
 
+    public function hitung_promo_ajax()
+    {
+        helper('promo');
+        
+        $subtotal = (float) $this->request->getGet('subtotal');
+        $voucher_code = $this->request->getGet('voucher_code') ?? '';
+
+        // Hitung menggunakan fungsi-fungsi dari promo_helper
+        $biaya_jasa = hitung_biaya_jasa($subtotal);
+        $data_voucher = hitung_diskon_voucher($subtotal, $voucher_code);
+        $free_mouse = hitung_free_mouse($subtotal);
+
+        return $this->response->setJSON([
+            'biaya_jasa'     => $biaya_jasa,
+            'voucher_persen' => $data_voucher['persen'],
+            'voucher_diskon' => $data_voucher['nominal'],
+            'free_mouse'     => $free_mouse
+        ]);
+    }
+
     public function buy()
     { 
         $cartItems = $this->cart->contents();
@@ -163,8 +183,8 @@ class TransaksiController extends BaseController
             return redirect()->back();
         }
 
-        // 1. LOAD HELPER DISKON (Wajib dilakukan agar fungsi hitung_diskon() bisa dibaca)
-        helper('diskon');
+        // 1. LOAD HELPER PROMO UAS (sebelumnya helper diskon kuis kemarin)
+        helper('promo');
 
         $db = \Config\Database::connect();
         $db->transStart(); 
@@ -174,21 +194,33 @@ class TransaksiController extends BaseController
             $subtotal += $item['qty'] * $item['price'];
         }
 
-        // 2. HITUNG LOGIKA DISKON BERDASARKAN SUBTOTAL BELANJA
-        $hasil_diskon = hitung_diskon($subtotal);
-        $nominal_diskon = $hasil_diskon['nominal']; // Menyimpan besaran nominal rupiah diskon
+        // 2. TANGKAP INPUTAN KODE VOUCHER DARI CHECKOUT
+        $voucher_code = $this->request->getVar('voucher_code') ?? '';
 
+        // 3. HITUNG ULANG LOGIKA BISNIS DI SERVER DEMI KEAMANAN DATA DB 
+        $biaya_jasa = hitung_biaya_jasa($subtotal);
+        $data_voucher = hitung_diskon_voucher($subtotal, $voucher_code);
+        $nominal_voucher = $data_voucher['nominal'];
+        $free_mouse = hitung_free_mouse($subtotal);
+
+        // 4. AMANKAN DATA ONGKIR
         $input_ongkir = $this->request->getVar('ongkir');
-
         $ongkir = (!empty($input_ongkir)) ? (float) $input_ongkir : 0.0;
 
+        // 5. RUMUS GRAND TOTAL SESUAI LEMBAR SOAL UAS
+        // Subtotal + Jasa - Voucher - Free Mouse + Ongkir
+        $total_akhir = $subtotal + $biaya_jasa - $nominal_voucher - $free_mouse + $ongkir;
+
         $transaction = [
-            'username'    => $this->request->getPost('username'),
-            'alamat'      => $this->request->getPost('alamat'),
-            'ongkir'      => $ongkir,
-            'diskon'      => (int) round($nominal_diskon), // Hasil Task 1 (Migration Kolom Diskon)
-            'total_harga' => $subtotal - $nominal_diskon + $ongkir, // Total dikurangi diskon sebelum ditambah ongkir
-            'status'      => 0, 
+            'username'       => $this->request->getPost('username'),
+            'alamat'         => $this->request->getPost('alamat'),
+            'ongkir'         => $ongkir,
+            'biaya_jasa'     => $biaya_jasa,     // Field Baru UAS 
+            'voucher_code'   => !empty($voucher_code) ? strtoupper(trim($voucher_code)) : null, // Field Baru UAS 
+            'diskon_voucher' => $nominal_voucher, // Field Baru UAS 
+            'free_mouse'     => $free_mouse,     // Field Baru UAS 
+            'total_harga'    => (int) round($total_akhir), 
+            'status'         => 0, 
         ];
 
         // insert transaction
@@ -205,7 +237,7 @@ class TransaksiController extends BaseController
                 'transaction_id' => $transactionId,
                 'product_id'     => $item['id'],
                 'jumlah'         => $item['qty'],
-                'diskon'         => 0,// Ini opsional, dibiarkan 0 jika diskon berlaku per transaksi global
+                'diskon'         => 0,
                 'subtotal_harga' => $item['qty'] * $item['price'] 
             ]);
         }
@@ -216,9 +248,9 @@ class TransaksiController extends BaseController
             return redirect()->back()->with('error', 'Gagal membuat transaksi');
         }
 
-            //hapus session keranjang belanja 
+        // hapus session keranjang belanja 
         $this->cart->destroy();
-        return redirect()->to(base_url())->with('success', 'Transaksi berhasil dibuat!');
+        return redirect()->to(base_url())->with('success', 'Transaksi Berhasil Dibuat!');
     }
 
     public function history()

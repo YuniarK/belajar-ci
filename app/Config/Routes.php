@@ -34,6 +34,7 @@ $routes->get('history', 'TransaksiController::history', ['filter' => 'auth']);
 
 $routes->get('ajax/destinations','TransaksiController::destinations', ['filter' => 'auth']);
 $routes->get('ajax/costs','TransaksiController::costs', ['filter' => 'auth']);
+$routes->get('transaksicontroller/hitung_promo_ajax', 'TransaksiController::hitung_promo_ajax', ['filter' => 'auth']);
 
 $routes->resource('api/products', ['controller' => 'Api\ProdukController']);
 

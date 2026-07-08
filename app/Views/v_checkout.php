@@ -22,7 +22,8 @@
             <?= form_input([
                 'name'  => 'alamat',
                 'id'    => 'alamat',
-                'class' => 'form-control']) ?>
+                'class' => 'form-control',
+                'placeholder' => 'Masukkan alamat lengkap']) ?>
         </div> 
         <div class="col-12"> 
             <?= form_label('Kelurahan', 'kelurahan', ['class' => 'form-label']) ?>
@@ -37,6 +38,13 @@
             <input type="text" id="ongkir_tampilan" class="form-control" readonly value="Rp 0">
             <input type="hidden" name="ongkir" id="ongkir" value="0">
         </div>
+        
+        <div class="col-12">
+            <?= form_label('Kode Voucher', 'voucher_code', ['class' => 'form-label']) ?>
+            <input type="text" name="voucher_code" id="voucher_code" class="form-control" placeholder="Contoh: PROMO2026">
+            <small class="text-muted">Tersedia: PROMO2025 (10%), PROMO2026 (15%), AKHIRTAHUN (25%)</small>
+        </div>
+
         <div class="col-12">
             <?= form_submit(
                 'submit',
@@ -46,6 +54,7 @@
 
         <?= form_close() ?> 
     </div>
+    
     <div class="col-lg-6">
         <table class="table">
             <thead>
@@ -74,25 +83,35 @@
                 <tr>
                     <td colspan="2"></td>
                     <td>Subtotal</td>
-                    <td><?= number_to_currency($total, 'IDR') ?></td>
+                    <td>IDR <?= number_format($total, 0, ',', '.') ?></td>
                 </tr>
                 
-                <?php 
-                    helper('diskon');
-                    $info_diskon = hitung_diskon($total); 
-                ?>
                 <tr>
                     <td colspan="2"></td>
-                    <td>Diskon</td>
+                    <td class="text-danger">Diskon Voucher</td>
                     <td class="text-danger">
-                        -<?= number_to_currency($info_diskon['nominal'], 'IDR') ?> (<span id="persen_tampilan"><?= $info_diskon['persen'] ?></span>%)
+                        -IDR <span id="tampil_diskon_voucher">0</span> (<span id="tampil_persen_voucher">0</span>%)
                     </td>
                 </tr>
-
                 <tr>
                     <td colspan="2"></td>
-                    <td>Grand Total</td>
-                    <td><span id="total"><?= number_to_currency($total - $info_diskon['nominal'], 'IDR') ?></span></td>
+                    <td>Biaya Jasa</td>
+                    <td>IDR <span id="tampil_biaya_jasa">0</span></td>
+                </tr>
+                <tr>
+                    <td colspan="2"></td>
+                    <td class="text-warning">Free Mouse</td>
+                    <td class="text-warning">-IDR <span id="tampil_free_mouse">0</span></td>
+                </tr>
+                <tr>
+                    <td colspan="2"></td>
+                    <td>Subtotal (+Jasa -Voucher -Free Mouse)</td>
+                    <td><strong>IDR <span id="subtotal_promo_tampilan">0</span></strong></td>
+                </tr>
+                <tr class="table-primary">
+                    <td colspan="2"></td>
+                    <td><strong>Grand Total (incl. Ongkir)</strong></td>
+                    <td><strong>IDR <span id="total">0</span></strong></td>
                 </tr>
             </tbody>
         </table>
@@ -106,20 +125,61 @@ $(document).ready(function() {
     let ongkir = 0;
     let subtotal = <?= $total ?>;
     
-    // Ambil nominal diskon dari perhitungan Helper PHP di atas
-    let nominalDiskon = <?= $info_diskon['nominal'] ?>;
-    hitungTotal();
+    // Variabel state promo global
+    let biayaJasa = 0;
+    let diskonVoucher = 0;
+    let persenVoucher = 0;
+    let freeMouse = 0;
+
+    // Hitung inisialisasi awal saat halaman dibuka
+    cekPromoDanHitung();
 
     function hitungTotal() {
-        // Rumus Grand Total Kuis: Subtotal - Diskon + Ongkir
-        let total = subtotal - nominalDiskon + ongkir;
+        // Rumus total kombinasi promo dan ongkir
+        let subtotalPromo = subtotal + biayaJasa - diskonVoucher - freeMouse;
+        let grandTotal = subtotalPromo + ongkir;
 
+        // Tembakkan hasil angka terformat ke interface ringkasan kanan
+        $("#tampil_biaya_jasa").text(biayaJasa.toLocaleString('id-ID'));
+        $("#tampil_diskon_voucher").text(diskonVoucher.toLocaleString('id-ID'));
+        $("#tampil_persen_voucher").text(persenVoucher);
+        $("#tampil_free_mouse").text(freeMouse.toLocaleString('id-ID'));
+        $("#subtotal_promo_tampilan").text(subtotalPromo.toLocaleString('id-ID'));
+        
+        // Atur display box input ongkir kiri
         $("#ongkir").val(ongkir);
         $("#ongkir_tampilan").val(`Rp ${ongkir.toLocaleString('id-ID')}`);
 
-        $("#total").text(`IDR ${total.toLocaleString('id-ID')}`);
-        $("#total_harga").val(total);
+        // Kunci nilai akhir ke element grand_total & input hidden form
+        $("#total").text(grandTotal.toLocaleString('id-ID'));
+        $("#total_harga").val(grandTotal);
     }
+
+    function cekPromoDanHitung() {
+        let kode = $("#voucher_code").val();
+        
+        $.ajax({
+            url: "<?= site_url('transaksicontroller/hitung_promo_ajax') ?>",
+            type: "GET",
+            dataType: "json",
+            data: {
+                subtotal: subtotal,
+                voucher_code: kode
+            },
+            success: function(res) {
+                biayaJasa = res.biaya_jasa;
+                diskonVoucher = res.voucher_diskon;
+                persenVoucher = res.voucher_persen;
+                freeMouse = res.free_mouse;
+                hitungTotal();
+            }
+        });
+    }
+
+    // Listener interaksi dinamis ketikan voucher promo
+    $("#voucher_code").on('keyup change', function() {
+        cekPromoDanHitung();
+    });
 
     $('#kelurahan').select2({
         placeholder: 'Cari daerah tujuan',
@@ -157,7 +217,6 @@ $(document).ready(function() {
             success: function (response) { 
                 $("#layanan").empty().append('<option value="">-- Pilih Layanan --</option>');
                 
-                // Menyesuaikan dengan response struktur objek 'data' dari Komerce API
                 if (response && response.length > 0) {
                     response.forEach(function (item) {
                         $("#layanan").append(
@@ -178,7 +237,7 @@ $(document).ready(function() {
     });
 
     $("#layanan").on('change', function() {
-        ongkir = parseInt($(this).val());
+        ongkir = parseInt($(this).val()) || 0;
         hitungTotal();
     }); 
 });
